@@ -3,7 +3,7 @@ import torch
 from torch import nn
 import numpy as np
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="AI Digit Recognizer", page_icon="🧠")
 
@@ -35,55 +35,85 @@ def load_model():
     return model
 
 st.title("🧠 AI Digit Recognizer")
-st.write("Нарисуй цифру от 0 до 9, и нейросеть попробует её распознать.")
+st.write("Нарисуй цифру на чёрном поле.")
 
-try:
-    model = load_model()
-except Exception as e:
-    st.error(f"Не удалось загрузить модель: {e}")
-    st.stop()
+components.html("""
+<div style="text-align:center">
+  <canvas id="pad" width="280" height="280"
+    style="width:280px;height:280px;background:black;
+    border:2px solid #60a5fa;border-radius:12px;
+    touch-action:none;cursor:crosshair"></canvas>
+  <br><br>
+  <button onclick="clearPad()" style="padding:10px 20px">
+    Очистить
+  </button>
+</div>
+<script>
+const canvas = document.getElementById('pad');
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = 'black';
+ctx.fillRect(0, 0, 280, 280);
+ctx.strokeStyle = 'white';
+ctx.lineWidth = 18;
+ctx.lineCap = 'round';
+ctx.lineJoin = 'round';
+let drawing = false;
 
-canvas_result = st_canvas(
-    fill_color="rgba(0, 0, 0, 0)",
-    stroke_width=20,
-    stroke_color="#FFFFFF",
-    background_color="#000000",
-    height=280,
-    width=280,
-    drawing_mode="freedraw",
-    key="digit_canvas",
-    display_toolbar=True,
+function pos(e) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX-r.left)*canvas.width/r.width,
+    y: (e.clientY-r.top)*canvas.height/r.height
+  };
+}
+canvas.onpointerdown = e => {
+  drawing = true;
+  canvas.setPointerCapture(e.pointerId);
+  const p = pos(e);
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y);
+};
+canvas.onpointermove = e => {
+  if (!drawing) return;
+  const p = pos(e);
+  ctx.lineTo(p.x,p.y);
+  ctx.stroke();
+};
+canvas.onpointerup = () => drawing = false;
+canvas.onpointercancel = () => drawing = false;
+function clearPad() {
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0,0,280,280);
+}
+</script>
+""", height=340)
+
+st.info(
+    "Ниже загрузи изображение своей цифры: "
+    "это позволит передать рисунок из браузера в нейросеть."
 )
 
-if st.button("🔍 Распознать цифру"):
-    try:
-        image_data = canvas_result.image_data
-    except RuntimeError:
-        image_data = None
+uploaded = st.file_uploader(
+    "Загрузи рисунок цифры в PNG",
+    type=["png"]
+)
 
-    if image_data is None:
-        st.warning("Сначала нарисуй цифру на чёрном поле!")
-    else:
-        arr = image_data.astype(np.uint8)
-        image = Image.fromarray(arr).convert("L")
-        image = image.resize((28, 28))
+if uploaded is not None:
+    image = Image.open(uploaded).convert("L").resize((28, 28))
+    pixels = np.array(image, dtype=np.float32) / 255.0
+    tensor = torch.from_numpy(pixels).unsqueeze(0).unsqueeze(0)
 
-        pixels = np.array(image, dtype=np.float32) / 255.0
-        tensor = torch.from_numpy(pixels).unsqueeze(0).unsqueeze(0)
+    model = load_model()
 
-        with torch.no_grad():
-            scores = model(tensor)
-            probabilities = torch.softmax(scores, dim=1)[0]
+    with torch.no_grad():
+        probabilities = torch.softmax(model(tensor), dim=1)[0]
 
-        digit = int(probabilities.argmax().item())
-        confidence = float(probabilities[digit].item() * 100)
-
-        st.success(f"Нейросеть распознала цифру: {digit}")
-        st.metric("Оценка уверенности", f"{confidence:.2f}%")
-
-        st.subheader("Оценки для всех цифр")
-        chart_data = {
-            "Цифра": list(range(10)),
-            "Оценка (%)": probabilities.numpy() * 100
-        }
-        st.bar_chart(chart_data, x="Цифра", y="Оценка (%)")
+    digit = int(probabilities.argmax().item())
+    st.success(f"Предсказание: {digit}")
+    st.metric(
+        "Оценка уверенности",
+        f"{probabilities[digit].item() * 100:.2f}%"
+    )
+    st.bar_chart({
+        "Оценка (%)": probabilities.numpy() * 100
+    })
