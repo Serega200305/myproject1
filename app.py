@@ -55,10 +55,15 @@ canvas_result = st_canvas(
 )
 
 if st.button("🔍 Распознать цифру"):
-    if canvas_result.image_data is None:
-        st.warning("Сначала нарисуй цифру.")
+    try:
+        image_data = canvas_result.image_data
+    except RuntimeError:
+        image_data = None
+
+    if image_data is None:
+        st.warning("Сначала нарисуй цифру на чёрном поле!")
     else:
-        arr = canvas_result.image_data.astype(np.uint8)
+        arr = image_data.astype(np.uint8)
         image = Image.fromarray(arr).convert("L")
         image = image.resize((28, 28))
 
@@ -78,8 +83,6 @@ if st.button("🔍 Распознать цифру"):
         st.subheader("Оценки для всех цифр")
         chart_data = {
             "Цифра": list(range(10)),
-            "Оценка (%)": (
-                probabilities.numpy() * 100
-            )
+            "Оценка (%)": probabilities.numpy() * 100
         }
         st.bar_chart(chart_data, x="Цифра", y="Оценка (%)")
