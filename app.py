@@ -53,7 +53,6 @@ canvas_result = st_canvas(
     drawing_mode="freedraw",
     key="digit_canvas",
     display_toolbar=True,
-    update_streamlit=True,
 )
 
 if st.button("🔍 Распознать цифру"):
