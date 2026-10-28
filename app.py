@@ -44,14 +44,16 @@ except Exception as e:
     st.stop()
 
 canvas_result = st_canvas(
-    fill_color="rgba(0,0,0,0)",
-    stroke_width=18,
+    fill_color="rgba(0, 0, 0, 0)",
+    stroke_width=20,
     stroke_color="#FFFFFF",
     background_color="#000000",
     height=280,
     width=280,
     drawing_mode="freedraw",
-    key="digit_canvas"
+    key="digit_canvas",
+    display_toolbar=True,
+    update_streamlit=True,
 )
 
 if st.button("🔍 Распознать цифру"):
